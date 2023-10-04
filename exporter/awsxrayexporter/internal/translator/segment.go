@@ -226,16 +226,7 @@ func CreateNonLocalRootSegment(span ptrace.Span, resource pcommon.Resource, inde
 	return []*awsxray.Segment{segment}, nil
 }
 
-// MakeSegmentsFromSpan creates one or more segments from a span
-func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
-	if !IsLocalRoot(span) {
-		return CreateNonLocalRootSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
-	}
-
-	if !HasDependencySubsegment(span) {
-		return CreateServiceSegmentWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
-	}
-
+func MakeServiceSegmentAndDependencySubsegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
 	// If it is a local root span and a dependency span, we need to make a segment and subsegment representing the local service and remote service, respectively.
 	var serviceSegmentID = newSegmentID()
 	var segments []*awsxray.Segment
@@ -255,6 +246,19 @@ func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAt
 	segments = append(segments, serviceSegment)
 
 	return segments, err
+}
+
+// MakeSegmentsFromSpan creates one or more segments from a span
+func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
+	if !IsLocalRoot(span) {
+		return CreateNonLocalRootSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
+	}
+
+	if !HasDependencySubsegment(span) {
+		return CreateServiceSegmentWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
+	}
+
+	return MakeServiceSegmentAndDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 }
 
 // MakeSegmentDocumentString converts an OpenTelemetry Span to an X-Ray Segment and then serialzies to JSON
