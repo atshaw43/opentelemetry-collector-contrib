@@ -106,7 +106,7 @@ func IsLocalRoot(span ptrace.Span) bool {
 	return false
 }
 
-func CreateDependencySubsegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
+func MakeDependencySubsegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
 	var dependencySpan = ptrace.NewSpan()
 	span.CopyTo(dependencySpan)
 
@@ -138,7 +138,7 @@ func CreateDependencySubsegment(span ptrace.Span, resource pcommon.Resource, ind
 	return dependencySubsegment, err
 }
 
-func CreateServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
+func MakeServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
 	// We always create a segment for the service
 	var serviceSpan ptrace.Span = ptrace.NewSpan()
 	span.CopyTo(serviceSpan)
@@ -203,7 +203,7 @@ func CreateServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAt
 	return serviceSegment, nil
 }
 
-func CreateServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
+func MakeServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
 	segment, err := MakeSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 
 	if err != nil {
@@ -216,7 +216,7 @@ func CreateServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Re
 	return []*awsxray.Segment{segment}, err
 }
 
-func CreateNonLocalRootSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
+func MakeNonLocalRootSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
 	segment, err := MakeSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 
 	if err != nil {
@@ -232,14 +232,14 @@ func MakeServiceSegmentAndDependencySubsegment(span ptrace.Span, resource pcommo
 	var segments []*awsxray.Segment
 
 	// Make Dependency Subsegment
-	dependencySubsegment, err := CreateDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
+	dependencySubsegment, err := MakeDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
 	if err != nil {
 		return nil, err
 	}
 	segments = append(segments, dependencySubsegment)
 
 	// Make Service Segment
-	serviceSegment, err := CreateServiceSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
+	serviceSegment, err := MakeServiceSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -251,11 +251,11 @@ func MakeServiceSegmentAndDependencySubsegment(span ptrace.Span, resource pcommo
 // MakeSegmentsFromSpan creates one or more segments from a span
 func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
 	if !IsLocalRoot(span) {
-		return CreateNonLocalRootSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
+		return MakeNonLocalRootSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 	}
 
 	if !HasDependencySubsegment(span) {
-		return CreateServiceSegmentWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
+		return MakeServiceSegmentWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 	}
 
 	return MakeServiceSegmentAndDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
