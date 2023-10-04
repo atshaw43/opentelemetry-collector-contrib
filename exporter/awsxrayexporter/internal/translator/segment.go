@@ -91,11 +91,11 @@ func MakeSegmentDocuments(span ptrace.Span, resource pcommon.Resource, indexedAt
 	return nil, err
 }
 
-// HasDependencySubsegment We will move to using isRemote once the collector supports deserializing it. Until then, we will rely on aws.span.kind.
 func HasDependencySubsegment(span ptrace.Span) bool {
 	return (span.Kind() != ptrace.SpanKindServer) && (span.Kind() != ptrace.SpanKindInternal)
 }
 
+// IsLocalRoot We will move to using isRemote once the collector supports deserializing it. Until then, we will rely on aws.span.kind.
 func IsLocalRoot(span ptrace.Span) bool {
 	if myAwsSpanKind, ok := span.Attributes().Get(awsSpanKind); ok {
 		if localRoot == myAwsSpanKind.Str() {
