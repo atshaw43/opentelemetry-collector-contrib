@@ -1030,7 +1030,7 @@ func TestConsumerSpanWithAwsRemoteServiceName(t *testing.T) {
 	attributes[conventions.AttributeHTTPHost] = "payment.amazonaws.com"
 	attributes[conventions.AttributeHTTPTarget] = "/"
 	attributes[conventions.AttributeRPCService] = "ABC"
-	attributes[awsLocalService] = "ConsumerService"
+	attributes[awsRemoteService] = "ConsumerService"
 
 	resource := constructDefaultResource()
 	span := constructConsumerSpan(parentSpanID, spanName, 0, "OK", attributes)
@@ -1268,7 +1268,7 @@ func TestLocalRootClient(t *testing.T) {
 	assert.Equal(t, "1.20.0", *segments[1].AWS.XRay.SDKVersion)
 	assert.Equal(t, true, *segments[1].AWS.XRay.AutoInstrumentation)
 	assert.Nil(t, segments[1].AWS.Operation)
-	assert.Equal(t, "remote", *segments[1].Namespace)
+	assert.Nil(t, segments[1].Namespace)
 
 	// Checks these values are the same for both
 	assert.Equal(t, segments[0].StartTime, segments[1].StartTime)
@@ -1519,7 +1519,7 @@ func TestNotLocalRootConsumer(t *testing.T) {
 
 	// Validate subsegment
 	assert.Equal(t, "subsegment", *segments[0].Type)
-	assert.Equal(t, "myLocalService", *segments[0].Name)
+	assert.Equal(t, "myRemoteService", *segments[0].Name)
 	assert.Equal(t, parentSpanID.String(), *segments[0].ParentID)
 	assert.Equal(t, 1, len(segments[0].Links))
 }
