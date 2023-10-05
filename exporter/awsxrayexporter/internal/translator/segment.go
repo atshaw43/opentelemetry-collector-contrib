@@ -65,6 +65,13 @@ const (
 	localRoot = "LOCAL_ROOT"
 )
 
+var removeAnnotationsFromServiceSegment = []string{
+	"aws.remote.service",
+	"aws.remote.operation",
+	"remote.target",
+	"K8s.RemoteNamespace",
+}
+
 var (
 	writers = newWriterPool(2048)
 )
@@ -92,15 +99,17 @@ func MakeSegmentDocuments(span ptrace.Span, resource pcommon.Resource, indexedAt
 }
 
 func HasDependencySubsegment(span ptrace.Span) bool {
-	return (span.Kind() != ptrace.SpanKindServer) && (span.Kind() != ptrace.SpanKindInternal)
+	_, hasAwsRemoteService := span.Attributes().Get(awsRemoteService)
+
+	return span.Kind() != ptrace.SpanKindServer &&
+		span.Kind() != ptrace.SpanKindInternal &&
+		hasAwsRemoteService
 }
 
 // IsLocalRoot We will move to using isRemote once the collector supports deserializing it. Until then, we will rely on aws.span.kind.
 func IsLocalRoot(span ptrace.Span) bool {
 	if myAwsSpanKind, ok := span.Attributes().Get(awsSpanKind); ok {
-		if localRoot == myAwsSpanKind.Str() {
-			return true
-		}
+		return localRoot == myAwsSpanKind.Str()
 	}
 
 	return false
@@ -146,14 +155,7 @@ func MakeServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAttr
 	// Set the span id to the one internally generated
 	serviceSpan.SetSpanID(serviceSegmentID)
 
-	removeAnnotations := []string{
-		"aws.remote.service",
-		"aws.remote.operation",
-		"remote.target",
-		"K8s.RemoteNamespace",
-	}
-
-	for _, v := range removeAnnotations {
+	for _, v := range removeAnnotationsFromServiceSegment {
 		serviceSpan.Attributes().Remove(v)
 	}
 
@@ -211,7 +213,12 @@ func MakeServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Reso
 	}
 
 	// Make internal spans a segment
-	segment.Type = nil
+	// And Ensure consumer process spans are not made a segment
+	_, hasAwsRemoteService := span.Attributes().Get(awsRemoteService)
+
+	if hasAwsRemoteService {
+		segment.Type = nil
+	}
 
 	return []*awsxray.Segment{segment}, err
 }
@@ -261,7 +268,8 @@ func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAt
 	return MakeServiceSegmentAndDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 }
 
-// MakeSegmentDocumentString converts an OpenTelemetry Span to an X-Ray Segment and then serialzies to JSON
+// MakeSegmentDocumentString converts an OpenTelemetry Span to an X-Ray Segment and then serializes to JSON
+// MakeSegmentDocumentString will be deprecated in the future
 func MakeSegmentDocumentString(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) (string, error) {
 	segment, err := MakeSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 
