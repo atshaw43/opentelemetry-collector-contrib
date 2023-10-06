@@ -98,16 +98,13 @@ func MakeSegmentDocuments(span ptrace.Span, resource pcommon.Resource, indexedAt
 	return nil, err
 }
 
-func HasDependencySubsegment(span ptrace.Span) bool {
-	_, hasAwsRemoteService := span.Attributes().Get(awsRemoteService)
-
+func isLocalRootSpanADependencySpan(span ptrace.Span) bool {
 	return span.Kind() != ptrace.SpanKindServer &&
-		span.Kind() != ptrace.SpanKindInternal &&
-		hasAwsRemoteService
+		span.Kind() != ptrace.SpanKindInternal
 }
 
 // IsLocalRoot We will move to using isRemote once the collector supports deserializing it. Until then, we will rely on aws.span.kind.
-func IsLocalRoot(span ptrace.Span) bool {
+func isLocalRoot(span ptrace.Span) bool {
 	if myAwsSpanKind, ok := span.Attributes().Get(awsSpanKind); ok {
 		return localRoot == myAwsSpanKind.Str()
 	}
@@ -115,7 +112,7 @@ func IsLocalRoot(span ptrace.Span) bool {
 	return false
 }
 
-func MakeDependencySubsegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
+func MakeDependencySubsegmentForLocalRootDependencySpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
 	var dependencySpan = ptrace.NewSpan()
 	span.CopyTo(dependencySpan)
 
@@ -135,8 +132,13 @@ func MakeDependencySubsegment(span ptrace.Span, resource pcommon.Resource, index
 	// Make this a subsegment
 	dependencySubsegment.Type = awsxray.String("subsegment")
 
-	if dependencySubsegment.Namespace == nil {
-		dependencySubsegment.Namespace = awsxray.String("remote")
+	if (span.Kind() == ptrace.SpanKindClient ||
+		span.Kind() == ptrace.SpanKindConsumer ||
+		span.Kind() == ptrace.SpanKindProducer) &&
+		dependencySubsegment.Namespace == nil {
+		if _, ok := span.Attributes().Get(awsRemoteService); ok {
+			dependencySubsegment.Namespace = awsxray.String("remote")
+		}
 	}
 
 	// Remove span links from consumer spans
@@ -147,7 +149,7 @@ func MakeDependencySubsegment(span ptrace.Span, resource pcommon.Resource, index
 	return dependencySubsegment, err
 }
 
-func MakeServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
+func MakeServiceSegmentForLocalRootDependencySpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
 	// We always create a segment for the service
 	var serviceSpan ptrace.Span = ptrace.NewSpan()
 	span.CopyTo(serviceSpan)
@@ -205,7 +207,7 @@ func MakeServiceSegment(span ptrace.Span, resource pcommon.Resource, indexedAttr
 	return serviceSegment, nil
 }
 
-func MakeServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
+func MakeServiceSegmentForLocalRootSpanWithoutDependency(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
 	segment, err := MakeSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 
 	if err != nil {
@@ -218,6 +220,7 @@ func MakeServiceSegmentWithoutDependency(span ptrace.Span, resource pcommon.Reso
 
 	if hasAwsRemoteService {
 		segment.Type = nil
+		segment.Namespace = nil
 	}
 
 	return []*awsxray.Segment{segment}, err
@@ -239,14 +242,14 @@ func MakeServiceSegmentAndDependencySubsegment(span ptrace.Span, resource pcommo
 	var segments []*awsxray.Segment
 
 	// Make Dependency Subsegment
-	dependencySubsegment, err := MakeDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
+	dependencySubsegment, err := MakeDependencySubsegmentForLocalRootDependencySpan(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
 	if err != nil {
 		return nil, err
 	}
 	segments = append(segments, dependencySubsegment)
 
 	// Make Service Segment
-	serviceSegment, err := MakeServiceSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
+	serviceSegment, err := MakeServiceSegmentForLocalRootDependencySpan(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation, serviceSegmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -257,12 +260,12 @@ func MakeServiceSegmentAndDependencySubsegment(span ptrace.Span, resource pcommo
 
 // MakeSegmentsFromSpan creates one or more segments from a span
 func MakeSegmentsFromSpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool) ([]*awsxray.Segment, error) {
-	if !IsLocalRoot(span) {
+	if !isLocalRoot(span) {
 		return MakeNonLocalRootSegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 	}
 
-	if !HasDependencySubsegment(span) {
-		return MakeServiceSegmentWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
+	if !isLocalRootSpanADependencySpan(span) {
+		return MakeServiceSegmentForLocalRootSpanWithoutDependency(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)
 	}
 
 	return MakeServiceSegmentAndDependencySubsegment(span, resource, indexedAttrs, indexAllAttrs, logGroupNames, skipTimestampValidation)

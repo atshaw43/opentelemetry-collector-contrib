@@ -1167,7 +1167,7 @@ func TestLocalRootConsumerProcess(t *testing.T) {
 	attributes[conventions.AttributeHTTPMethod] = "POST"
 	attributes[conventions.AttributeMessagingOperation] = "receive"
 	attributes["otel.resource.attributes"] = "service.name=myTest"
-	attributes["aws.span.kind"] = "LOCAL_ROOT"
+	attributes["aws.span.kind"] = "Consumer"
 	attributes["aws.local.service"] = "myLocalService"
 	attributes["myAnnotationKey"] = "myAnnotationValue"
 	attributes[awsxray.AWSOperationAttribute] = "UpdateItem"
@@ -1203,7 +1203,7 @@ func TestLocalRootConsumerProcess(t *testing.T) {
 	assert.Equal(t, 1, len(segments[0].Annotations))
 	assert.Equal(t, "myAnnotationValue", segments[0].Annotations["myAnnotationKey"])
 	assert.Equal(t, 4, len(segments[0].Metadata["default"]))
-	assert.Equal(t, "LOCAL_ROOT", segments[0].Metadata["default"]["aws.span.kind"])
+	assert.Equal(t, "Consumer", segments[0].Metadata["default"]["aws.span.kind"])
 	assert.Equal(t, "myLocalService", segments[0].Metadata["default"]["aws.local.service"])
 	assert.Equal(t, "receive", segments[0].Metadata["default"]["messaging.operation"])
 	assert.Equal(t, "service.name=myTest", segments[0].Metadata["default"]["otel.resource.attributes"])
