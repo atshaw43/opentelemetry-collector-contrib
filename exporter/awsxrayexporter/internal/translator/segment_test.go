@@ -1104,7 +1104,14 @@ func validateLocalRootDependencySubsegment(t *testing.T, segment *awsxray.Segmen
 	assert.Equal(t, "MySDK", *segment.AWS.XRay.SDK)
 	assert.Equal(t, "1.20.0", *segment.AWS.XRay.SDKVersion)
 	assert.Equal(t, true, *segment.AWS.XRay.AutoInstrumentation)
+
 	assert.Equal(t, "UpdateItem", *segment.AWS.Operation)
+	assert.Equal(t, "AWSAccountAttribute", *segment.AWS.AccountID)
+	assert.Equal(t, "AWSRegionAttribute", *segment.AWS.RemoteRegion)
+	assert.Equal(t, "AWSRequestIDAttribute", *segment.AWS.RequestID)
+	assert.Equal(t, "AWSQueueURLAttribute", *segment.AWS.QueueURL)
+	assert.Equal(t, "TableName", *segment.AWS.TableName)
+
 	assert.Equal(t, "remote", *segment.Namespace)
 }
 
@@ -1124,6 +1131,11 @@ func validateLocalRootServiceSegment(t *testing.T, segment *awsxray.Segment, spa
 	assert.Equal(t, "1.20.0", *segment.AWS.XRay.SDKVersion)
 	assert.Equal(t, true, *segment.AWS.XRay.AutoInstrumentation)
 	assert.Nil(t, segment.AWS.Operation)
+	assert.Nil(t, segment.AWS.AccountID)
+	assert.Nil(t, segment.AWS.RemoteRegion)
+	assert.Nil(t, segment.AWS.RequestID)
+	assert.Nil(t, segment.AWS.QueueURL)
+	assert.Nil(t, segment.AWS.TableName)
 	assert.Nil(t, segment.Namespace)
 }
 
@@ -1132,7 +1144,9 @@ func getBasicAttributes() map[string]interface{} {
 
 	attributes[conventions.AttributeHTTPMethod] = "POST"
 	attributes[conventions.AttributeMessagingOperation] = "receive"
+
 	attributes["otel.resource.attributes"] = "service.name=myTest"
+
 	attributes[awsSpanKind] = "LOCAL_ROOT"
 	attributes[awsRemoteService] = "myRemoteService"
 	attributes[awsRemoteOperation] = "myRemoteOperation"
@@ -1140,8 +1154,15 @@ func getBasicAttributes() map[string]interface{} {
 	attributes[k8sRemoteNamespace] = "k8sRemoteNamespace"
 	attributes[awsLocalService] = "myLocalService"
 	attributes[awsLocalOperation] = "awsLocalOperation"
+
 	attributes["myAnnotationKey"] = "myAnnotationValue"
+
 	attributes[awsxray.AWSOperationAttribute] = "UpdateItem"
+	attributes[awsxray.AWSAccountAttribute] = "AWSAccountAttribute"
+	attributes[awsxray.AWSRegionAttribute] = "AWSRegionAttribute"
+	attributes[awsxray.AWSRequestIDAttribute] = "AWSRequestIDAttribute"
+	attributes[awsxray.AWSQueueURLAttribute] = "AWSQueueURLAttribute"
+	attributes[awsxray.AWSTableNameAttribute] = "TableName"
 
 	return attributes
 }
@@ -1353,7 +1374,14 @@ func validateLocalRootWithoutDependency(t *testing.T, segment *awsxray.Segment, 
 	assert.Equal(t, "MySDK", *segment.AWS.XRay.SDK)
 	assert.Equal(t, "1.20.0", *segment.AWS.XRay.SDKVersion)
 	assert.Equal(t, true, *segment.AWS.XRay.AutoInstrumentation)
+
 	assert.Equal(t, "UpdateItem", *segment.AWS.Operation)
+	assert.Equal(t, "AWSAccountAttribute", *segment.AWS.AccountID)
+	assert.Equal(t, "AWSRegionAttribute", *segment.AWS.RemoteRegion)
+	assert.Equal(t, "AWSRequestIDAttribute", *segment.AWS.RequestID)
+	assert.Equal(t, "AWSQueueURLAttribute", *segment.AWS.QueueURL)
+	assert.Equal(t, "TableName", *segment.AWS.TableName)
+
 	assert.Nil(t, segment.Namespace)
 }
 
@@ -1404,8 +1432,6 @@ func TestNotLocalRootInternal(t *testing.T) {
 
 	attributes := getBasicAttributes()
 	attributes[awsSpanKind] = "Internal"
-	delete(attributes, awsRemoteService)
-	delete(attributes, awsRemoteOperation)
 
 	span := constructInternalSpan(parentSpanID, spanName, 200, "OK", attributes)
 
@@ -1419,6 +1445,7 @@ func TestNotLocalRootInternal(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
+	assert.Nil(t, segments[0].Namespace)
 	assert.Equal(t, "MyService", *segments[0].Name)
 }
 
@@ -1429,8 +1456,6 @@ func TestNotLocalRootConsumer(t *testing.T) {
 
 	attributes := getBasicAttributes()
 	attributes[awsSpanKind] = "Consumer"
-	delete(attributes, awsRemoteService)
-	delete(attributes, awsRemoteOperation)
 
 	span := constructConsumerSpan(parentSpanID, spanName, 200, "OK", attributes)
 
@@ -1444,7 +1469,8 @@ func TestNotLocalRootConsumer(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
-	assert.Equal(t, "MyService", *segments[0].Name)
+	//assert.Equal(t, "remote", *segments[0].Namespace)
+	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
 func TestNotLocalRootClient(t *testing.T) {
@@ -1454,8 +1480,6 @@ func TestNotLocalRootClient(t *testing.T) {
 
 	attributes := getBasicAttributes()
 	attributes[awsSpanKind] = "Client"
-	delete(attributes, awsRemoteService)
-	delete(attributes, awsRemoteOperation)
 
 	span := constructClientSpan(parentSpanID, spanName, 200, "OK", attributes)
 
@@ -1469,7 +1493,7 @@ func TestNotLocalRootClient(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
-	assert.Equal(t, "MyService", *segments[0].Name)
+	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
 func TestNotLocalRootProducer(t *testing.T) {
@@ -1479,8 +1503,6 @@ func TestNotLocalRootProducer(t *testing.T) {
 
 	attributes := getBasicAttributes()
 	attributes[awsSpanKind] = "Producer"
-	delete(attributes, awsRemoteService)
-	delete(attributes, awsRemoteOperation)
 
 	span := constructProducerSpan(parentSpanID, spanName, 200, "OK", attributes)
 
@@ -1494,7 +1516,7 @@ func TestNotLocalRootProducer(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
-	assert.Equal(t, "MyService", *segments[0].Name)
+	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
 func TestNotLocalRootServer(t *testing.T) {
