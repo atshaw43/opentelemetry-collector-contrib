@@ -36,9 +36,13 @@ const (
 
 // x-ray only span attributes - https://github.com/open-telemetry/opentelemetry-java-contrib/pull/802
 const (
-	awsLocalService  = "aws.local.service"
-	awsRemoteService = "aws.remote.service"
-	awsSpanKind      = "aws.span.kind"
+	awsLocalService    = "aws.local.service"
+	awsRemoteService   = "aws.remote.service"
+	awsLocalOperation  = "aws.local.operation"
+	awsRemoteOperation = "aws.remote.operation"
+	remoteTarget       = "remoteTarget"
+	awsSpanKind        = "aws.span.kind"
+	k8sRemoteNamespace = "K8s.RemoteNamespace"
 )
 
 var (
@@ -66,10 +70,10 @@ const (
 )
 
 var removeAnnotationsFromServiceSegment = []string{
-	"aws.remote.service",
-	"aws.remote.operation",
-	"remote.target",
-	"K8s.RemoteNamespace",
+	awsRemoteService,
+	awsRemoteOperation,
+	remoteTarget,
+	k8sRemoteNamespace,
 }
 
 var (
