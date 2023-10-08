@@ -116,6 +116,18 @@ func isLocalRoot(span ptrace.Span) bool {
 	return false
 }
 
+func addNamespaceToSpansWithRemoteService(span ptrace.Span, segment *awsxray.Segment) {
+	// We need to at least cover the
+	if (span.Kind() == ptrace.SpanKindClient ||
+		span.Kind() == ptrace.SpanKindConsumer ||
+		span.Kind() == ptrace.SpanKindProducer) &&
+		segment.Namespace == nil {
+		if _, ok := span.Attributes().Get(awsRemoteService); ok {
+			segment.Namespace = awsxray.String("remote")
+		}
+	}
+}
+
 func MakeDependencySubsegmentForLocalRootDependencySpan(span ptrace.Span, resource pcommon.Resource, indexedAttrs []string, indexAllAttrs bool, logGroupNames []string, skipTimestampValidation bool, serviceSegmentID pcommon.SpanID) (*awsxray.Segment, error) {
 	var dependencySpan = ptrace.NewSpan()
 	span.CopyTo(dependencySpan)
@@ -136,14 +148,7 @@ func MakeDependencySubsegmentForLocalRootDependencySpan(span ptrace.Span, resour
 	// Make this a subsegment
 	dependencySubsegment.Type = awsxray.String("subsegment")
 
-	if (span.Kind() == ptrace.SpanKindClient ||
-		span.Kind() == ptrace.SpanKindConsumer ||
-		span.Kind() == ptrace.SpanKindProducer) &&
-		dependencySubsegment.Namespace == nil {
-		if _, ok := span.Attributes().Get(awsRemoteService); ok {
-			dependencySubsegment.Namespace = awsxray.String("remote")
-		}
-	}
+	addNamespaceToSpansWithRemoteService(span, dependencySubsegment)
 
 	// Remove span links from consumer spans
 	if span.Kind() == ptrace.SpanKindConsumer {
@@ -236,6 +241,8 @@ func MakeNonLocalRootSegment(span ptrace.Span, resource pcommon.Resource, indexe
 	if err != nil {
 		return nil, err
 	}
+
+	addNamespaceToSpansWithRemoteService(span, segment)
 
 	return []*awsxray.Segment{segment}, nil
 }

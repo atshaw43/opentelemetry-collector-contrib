@@ -1033,7 +1033,7 @@ func TestConsumerSpanWithAwsRemoteServiceName(t *testing.T) {
 	attributes[awsRemoteService] = "ConsumerService"
 
 	resource := constructDefaultResource()
-	span := constructConsumerSpan(parentSpanID, spanName, 0, "OK", attributes)
+	span := constructConsumerSpan(parentSpanID, spanName, 0, "Ok", attributes)
 
 	segment, _ := MakeSegment(span, resource, nil, false, nil, false)
 	assert.Equal(t, "ConsumerService", *segment.Name)
@@ -1136,6 +1136,8 @@ func validateLocalRootServiceSegment(t *testing.T, segment *awsxray.Segment, spa
 	assert.Nil(t, segment.AWS.RequestID)
 	assert.Nil(t, segment.AWS.QueueURL)
 	assert.Nil(t, segment.AWS.TableName)
+	assert.Nil(t, segment.Namespace)
+
 	assert.Nil(t, segment.Namespace)
 }
 
@@ -1318,7 +1320,7 @@ func TestLocalRootProducer(t *testing.T) {
 
 	attributes := getBasicAttributes()
 
-	span := constructProducerSpan(parentSpanID, spanName, 200, "OK", attributes)
+	span := constructProducerSpan(parentSpanID, spanName, 200, "Ok", attributes)
 
 	addSpanLink(span)
 
@@ -1469,7 +1471,7 @@ func TestNotLocalRootConsumer(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
-	//assert.Equal(t, "remote", *segments[0].Namespace)
+	assert.Equal(t, "remote", *segments[0].Namespace)
 	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
@@ -1493,6 +1495,7 @@ func TestNotLocalRootClient(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
+	assert.Equal(t, "remote", *segments[0].Namespace)
 	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
@@ -1516,6 +1519,7 @@ func TestNotLocalRootProducer(t *testing.T) {
 
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
+	assert.Equal(t, "remote", *segments[0].Namespace)
 	assert.Equal(t, "myRemoteService", *segments[0].Name)
 }
 
@@ -1541,6 +1545,7 @@ func TestNotLocalRootServer(t *testing.T) {
 
 	// Validate segment
 	assert.Nil(t, segments[0].Type)
+	assert.Nil(t, segments[0].Namespace)
 	assert.Equal(t, "myLocalService", *segments[0].Name)
 }
 
