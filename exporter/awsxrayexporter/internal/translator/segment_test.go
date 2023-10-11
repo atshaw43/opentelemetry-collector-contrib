@@ -1024,19 +1024,11 @@ func TestConsumerSpanWithAwsRemoteServiceName(t *testing.T) {
 	spanName := "ABC.payment"
 	parentSpanID := newSegmentID()
 	user := "testingT"
-	attributes := make(map[string]interface{})
-	attributes[conventions.AttributeHTTPMethod] = "POST"
-	attributes[conventions.AttributeHTTPScheme] = "https"
-	attributes[conventions.AttributeHTTPHost] = "payment.amazonaws.com"
-	attributes[conventions.AttributeHTTPTarget] = "/"
-	attributes[conventions.AttributeRPCService] = "ABC"
+	attributes := getBasicAttributes()
 	attributes[awsRemoteService] = "ConsumerService"
 
 	resource := constructDefaultResource()
 	span := constructConsumerSpan(parentSpanID, spanName, 0, "Ok", attributes)
-
-	segment, _ := MakeSegment(span, resource, nil, false, nil, false)
-	assert.Equal(t, "ConsumerService", *segment.Name)
 
 	jsonStr, err := MakeSegmentDocumentString(span, resource, nil, false, nil, false)
 
@@ -1213,7 +1205,7 @@ func TestLocalRootConsumer(t *testing.T) {
 	assert.Equal(t, segments[0].EndTime, segments[1].EndTime)
 }
 
-func TestLocalRootConsumerProcess(t *testing.T) {
+func TestNonLocalRootConsumerProcess(t *testing.T) {
 	spanName := "destination operation"
 	resource := getBasicResource()
 	parentSpanID := newSegmentID()
@@ -1472,7 +1464,7 @@ func TestNotLocalRootConsumer(t *testing.T) {
 	// Validate segment
 	assert.Equal(t, "subsegment", *segments[0].Type)
 	assert.Equal(t, "remote", *segments[0].Namespace)
-	assert.Equal(t, "myRemoteService", *segments[0].Name)
+	assert.Equal(t, "MyService", *segments[0].Name)
 }
 
 func TestNotLocalRootClient(t *testing.T) {

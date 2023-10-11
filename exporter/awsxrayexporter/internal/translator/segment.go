@@ -116,11 +116,11 @@ func isLocalRoot(span ptrace.Span) bool {
 	return false
 }
 
-func addNamespaceToSpansWithRemoteService(span ptrace.Span, segment *awsxray.Segment) {
-	// We need to at least cover the
+func addNamespaceToSubsegmentWithRemoteService(span ptrace.Span, segment *awsxray.Segment) {
 	if (span.Kind() == ptrace.SpanKindClient ||
 		span.Kind() == ptrace.SpanKindConsumer ||
 		span.Kind() == ptrace.SpanKindProducer) &&
+		segment.Type != nil &&
 		segment.Namespace == nil {
 		if _, ok := span.Attributes().Get(awsRemoteService); ok {
 			segment.Namespace = awsxray.String("remote")
@@ -143,12 +143,18 @@ func MakeDependencySubsegmentForLocalRootDependencySpan(span ptrace.Span, resour
 	// Make this a subsegment
 	dependencySubsegment.Type = awsxray.String("subsegment")
 
-	addNamespaceToSpansWithRemoteService(span, dependencySubsegment)
+	if dependencySubsegment.Namespace == nil {
+		dependencySubsegment.Namespace = awsxray.String("remote")
+	}
 
 	// Remove span links from consumer spans
 	if span.Kind() == ptrace.SpanKindConsumer {
 		dependencySubsegment.Links = nil
 	}
+
+	myAwsRemoteService, _ := span.Attributes().Get(awsRemoteService)
+
+	dependencySubsegment.Name = awsxray.String(myAwsRemoteService.Str())
 
 	return dependencySubsegment, err
 }
@@ -218,14 +224,8 @@ func MakeServiceSegmentForLocalRootSpanWithoutDependency(span ptrace.Span, resou
 		return nil, err
 	}
 
-	// Make internal spans a segment
-	// And Ensure consumer process spans are not made a segment
-	_, hasAwsRemoteService := span.Attributes().Get(awsRemoteService)
-
-	if hasAwsRemoteService {
-		segment.Type = nil
-		segment.Namespace = nil
-	}
+	segment.Type = nil
+	segment.Namespace = nil
 
 	return []*awsxray.Segment{segment}, err
 }
@@ -237,7 +237,7 @@ func MakeNonLocalRootSegment(span ptrace.Span, resource pcommon.Resource, indexe
 		return nil, err
 	}
 
-	addNamespaceToSpansWithRemoteService(span, segment)
+	addNamespaceToSubsegmentWithRemoteService(span, segment)
 
 	return []*awsxray.Segment{segment}, nil
 }
@@ -356,7 +356,7 @@ func MakeSegment(span ptrace.Span, resource pcommon.Resource, indexedAttrs []str
 		}
 	}
 
-	if span.Kind() == ptrace.SpanKindClient || span.Kind() == ptrace.SpanKindProducer || span.Kind() == ptrace.SpanKindConsumer {
+	if span.Kind() == ptrace.SpanKindClient || span.Kind() == ptrace.SpanKindProducer {
 		if remoteServiceName, ok := attributes.Get(awsRemoteService); ok {
 			name = remoteServiceName.Str()
 		}
