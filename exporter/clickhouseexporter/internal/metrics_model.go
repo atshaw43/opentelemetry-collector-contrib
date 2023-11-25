@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
 
@@ -51,11 +51,7 @@ func SetLogger(l *zap.Logger) {
 }
 
 // NewMetricsTable create metric tables with an expiry time to storage metric telemetry data
-func NewMetricsTable(ctx context.Context, tableName string, ttlDays uint, db *sql.DB) error {
-	var ttlExpr string
-	if ttlDays > 0 {
-		ttlExpr = fmt.Sprintf(`TTL toDateTime(TimeUnix) + toIntervalDay(%d)`, ttlDays)
-	}
+func NewMetricsTable(ctx context.Context, tableName string, ttlExpr string, db *sql.DB) error {
 	for table := range supportedMetricTypes {
 		query := fmt.Sprintf(table, tableName, ttlExpr)
 		if _, err := db.ExecContext(ctx, query); err != nil {
@@ -101,7 +97,7 @@ func InsertMetrics(ctx context.Context, db *sql.DB, metricsMap map[pmetric.Metri
 	close(errsChan)
 	var errs error
 	for err := range errsChan {
-		errs = multierr.Append(errs, err)
+		errs = errors.Join(errs, err)
 	}
 	return errs
 }

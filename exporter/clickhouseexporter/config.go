@@ -8,20 +8,18 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.uber.org/multierr"
 )
 
 // Config defines configuration for Elastic exporter.
 type Config struct {
 	exporterhelper.TimeoutSettings `mapstructure:",squash"`
 	exporterhelper.RetrySettings   `mapstructure:"retry_on_failure"`
-	// QueueSettings is a subset of exporterhelper.QueueSettings,
-	// because only QueueSize is user-settable.
-	QueueSettings QueueSettings `mapstructure:"sending_queue"`
+	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
 
 	// Endpoint is the clickhouse endpoint.
 	Endpoint string `mapstructure:"endpoint"`
@@ -40,13 +38,10 @@ type Config struct {
 	// MetricsTableName is the table name for metrics. default is `otel_metrics`.
 	MetricsTableName string `mapstructure:"metrics_table_name"`
 	// TTLDays is The data time-to-live in days, 0 means no ttl.
+	// Deprecated: Use 'ttl' instead
 	TTLDays uint `mapstructure:"ttl_days"`
-}
-
-// QueueSettings is a subset of exporterhelper.QueueSettings.
-type QueueSettings struct {
-	// QueueSize set the length of the sending queue
-	QueueSize int `mapstructure:"queue_size"`
+	// TTL is The data time-to-live example 30m, 48h. 0 means no ttl.
+	TTL time.Duration `mapstructure:"ttl"`
 }
 
 const defaultDatabase = "default"
@@ -54,33 +49,30 @@ const defaultDatabase = "default"
 var (
 	errConfigNoEndpoint      = errors.New("endpoint must be specified")
 	errConfigInvalidEndpoint = errors.New("endpoint must be url format")
+	errConfigTTL             = errors.New("both 'ttl_days' and 'ttl' can not be provided. 'ttl_days' is deprecated, use 'ttl' instead")
 )
 
 // Validate the clickhouse server configuration.
 func (cfg *Config) Validate() (err error) {
 	if cfg.Endpoint == "" {
-		err = multierr.Append(err, errConfigNoEndpoint)
+		err = errors.Join(err, errConfigNoEndpoint)
 	}
 	dsn, e := cfg.buildDSN(cfg.Database)
 	if e != nil {
-		err = multierr.Append(err, e)
+		err = errors.Join(err, e)
+	}
+
+	if cfg.TTL > 0 && cfg.TTLDays > 0 {
+		err = errors.Join(err, errConfigTTL)
 	}
 
 	// Validate DSN with clickhouse driver.
 	// Last chance to catch invalid config.
 	if _, e := clickhouse.ParseDSN(dsn); e != nil {
-		err = multierr.Append(err, e)
+		err = errors.Join(err, e)
 	}
 
 	return err
-}
-
-func (cfg *Config) enforcedQueueSettings() exporterhelper.QueueSettings {
-	return exporterhelper.QueueSettings{
-		Enabled:      true,
-		NumConsumers: 1,
-		QueueSize:    cfg.QueueSettings.QueueSize,
-	}
 }
 
 func (cfg *Config) buildDSN(database string) (string, error) {

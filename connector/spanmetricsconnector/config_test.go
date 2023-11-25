@@ -4,6 +4,7 @@
 package spanmetricsconnector
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/multierr"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector/internal/metrics"
@@ -107,7 +107,7 @@ func TestLoadConfig(t *testing.T) {
 			err = component.UnmarshalConfig(sub, cfg)
 
 			if tt.expected == nil {
-				err = multierr.Append(err, component.ValidateConfig(cfg))
+				err = errors.Join(err, component.ValidateConfig(cfg))
 				assert.ErrorContains(t, err, tt.errorMessage)
 				return
 			}
@@ -163,6 +163,50 @@ func TestValidateDimensions(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateDimensions(tc.dimensions)
+			if tc.expectedErr != "" {
+				assert.EqualError(t, err, tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateEventDimensions(t *testing.T) {
+	for _, tc := range []struct {
+		enabled     bool
+		name        string
+		dimensions  []Dimension
+		expectedErr string
+	}{
+		{
+			enabled:    false,
+			name:       "disabled - no additional dimensions",
+			dimensions: []Dimension{},
+		},
+		{
+			enabled:     true,
+			name:        "enabled - no additional dimensions",
+			dimensions:  []Dimension{},
+			expectedErr: "no dimensions configured for events",
+		},
+		{
+			enabled:    true,
+			name:       "enabled - no duplicate dimensions",
+			dimensions: []Dimension{{Name: "exception_type"}},
+		},
+		{
+			enabled: true,
+			name:    "enabled - duplicate dimensions",
+			dimensions: []Dimension{
+				{Name: "exception_type"},
+				{Name: "exception_type"},
+			},
+			expectedErr: "duplicate dimension name exception_type",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateEventDimensions(tc.enabled, tc.dimensions)
 			if tc.expectedErr != "" {
 				assert.EqualError(t, err, tc.expectedErr)
 			} else {
